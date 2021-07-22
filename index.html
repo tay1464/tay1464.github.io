@@ -1,0 +1,298 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Snake</title>
+    <style>
+        .text{
+            width: 100%;
+            line-height: 30px;
+            height: 30px;
+            font-size: 16pt;
+            text-align: center;
+        }
+        canvas{
+            display: block;
+            margin: 30px auto;
+            border: solid;
+            border-width: 1px;
+            border-color:rgb(51, 51, 51);
+            box-shadow: 0 0 12px 2px rgba(51, 51, 51, 0.8);
+            
+        }
+        .slider-contain{
+            text-align: center;
+            position: relative;
+        }
+        .slider-bar{
+            display: inline-block;
+            height: 8px;
+            width: 300px;
+            background-color: rgb(218, 218, 218);            
+            border: solid;
+            border-color: rgb(218, 218, 218);            
+            border-width: 1px;
+            box-shadow: 0 0 8px 2px rgba(97, 97, 97, 0.8);
+        }
+        .slider-block{
+            position: absolute;
+            height: 23px;
+            width: 10px;
+            background-color: rgb(8, 85, 8);
+            margin-top: -7px;
+            cursor: pointer;
+        }
+        
+    </style>
+</head>
+<body>
+    <div class="text" id="score">0</div>
+    <canvas id="canvas"></canvas>    
+    <div class="slider-contain">     
+        <abbr title="拖动调节速度">     
+            <div class="slider-bar">
+                <div class="slider-block"></div>
+            </div>  
+        </abbr>                                  
+    </div>    
+    <br><br>
+    <div class="text">
+        上下左右控制方向
+    </div>    
+    <div class="text">
+        按F5重新开始|空格暂停/继续
+    </div>    
+</body>
+    
+<script>
+ 
+ 
+const direction={
+    UP:0,
+    RIGHT:1,
+    DOWN:2,
+    LEFT:3
+}
+ 
+var snake={
+    color:'#04573D',
+    headColor:'#211E1E',
+    size:10,
+    length:3,
+    direction:direction.RIGHT,
+    speed:100,// 200ms/move 1 time  200-50
+    body:[
+        {x:25,y:145},
+        {x:15,y:145},
+        {x:5,y:145}
+    ],//每一节身体的位置
+    tail:[]//记录所有的尾巴,以便吃到食物后增长，按食物大小增长长度    
+}
+ 
+var food={
+    color:'#8F401F',
+    size:10,
+    position:{x:200,y:200},//食物出现的位置
+}
+ 
+var map={
+    color:'#868686',
+}
+ 
+var Game=function(){
+    this.score=0;//计分
+    this.isDealControl=true;//是否处理了方向控制
+    this.pause=false;//游戏暂停
+    this.direction=direction;//方向枚举
+    this.snake=snake;//蛇
+    this.food=food;//食物
+    this.map=map;    //地图
+    this.canvas=document.getElementById('canvas');
+    this.canvas.width = 300;
+    this.canvas.height = 300;
+    this.cxt=this.canvas.getContext("2d");
+ 
+    let speed=localStorage.getItem("snake_speed");
+    if(speed)
+        this.snake.speed=parseInt(speed);
+    else
+        localStorage.setItem('snake_speed',this.snake.speed);    
+    this.init();
+    this.draw_map();
+    this.create_food();
+    window.onkeyup=this.control.bind(this);
+}
+ 
+Game.prototype.draw_map=function(){        
+    this.cxt.fillStyle=this.map.color;
+    this.cxt.fillRect(0,0,this.canvas.width,this.canvas.height);    
+}
+Game.prototype.reset_map=function(){
+    this.cxt.clearRect(0,0,this.canvas.width,this.canvas.height);
+    this.draw_map(); 
+    this.draw_snake(); 
+    this.draw_food();  
+}
+Game.prototype.draw_snake=function(){      
+    for(var i in this.snake.body){
+        if(i==0)//头部        
+            this.cxt.fillStyle=this.snake.headColor;                    
+        else
+            this.cxt.fillStyle=this.snake.color;        
+        this.cxt.fillRect(this.snake.body[i].x-this.snake.size/2,this.snake.body[i].y-this.snake.size/2,this.snake.size,this.snake.size);
+    }            
+}
+Game.prototype.create_food=function(){
+    this.food.size=10+Math.round(Math.random()*20);
+    this.food.position.x=Math.round(Math.random()*this.canvas.width);
+    this.food.position.y=Math.round(Math.random()*this.canvas.height);
+    if(this.food.position.x<this.food.size/2)this.food.position.x=this.food.size/2;
+    if(this.food.position.y<this.food.size/2)this.food.position.y=this.food.size/2;
+    if(this.food.position.x>this.canvas.width-this.food.size/2)this.food.position.x=this.canvas.width-this.food.size/2
+    if(this.food.position.y>this.canvas.height-this.food.size/2)this.food.position.y=this.canvas.height-this.food.size/2
+}
+Game.prototype.draw_food=function(){
+    this.cxt.fillStyle=this.food.color;
+    this.cxt.fillRect(this.food.position.x-this.food.size/2,this.food.position.y-this.food.size/2,this.food.size,this.food.size);
+}
+Game.prototype.move=function(){
+    const json=JSON.stringify(this.snake.body);    
+    const oldbody=JSON.parse(json);
+    this.snake.tail.push(oldbody[oldbody.length-1]); 
+    //续上尾巴个数
+    let tailCount=1;
+    //每截身体移动：头部移动，之后的每一节=前一节    
+    for(var i=0;i<this.snake.length;i++){
+        if(i==0)
+        {
+            switch(this.snake.direction){
+                case direction.UP:this.snake.body[i].y-=this.snake.size;break;
+                case direction.RIGHT:this.snake.body[i].x+=this.snake.size;break;
+                case direction.DOWN:this.snake.body[i].y+=this.snake.size;break;
+                case direction.LEFT:this.snake.body[i].x-=this.snake.size;break;
+            }            
+        }
+        else{
+            if(i<this.snake.body.length){
+                this.snake.body[i]=oldbody[i-1]              
+            }else{
+                this.snake.body[i]=this.snake.tail[this.snake.tail.length-tailCount]
+                tailCount++;
+            }
+        }                             
+    } 
+    this.isDealControl=true;   
+    //碰撞检测
+    //碰撞墙壁
+    if(this.snake.body[0].x-this.snake.size/2<0||this.snake.body[0].x+this.snake.size/2>this.canvas.width||this.snake.body[0].y-this.snake.size/2<0||this.snake.body[0].y+this.snake.size/2>this.canvas.height){
+        return false;      
+    }   
+    //碰撞自己 xy均有重叠
+    for(var i=1;i<this.snake.body.length;i++) {        
+        if(
+        Math.abs(this.snake.body[0].x - this.snake.body[i].x) < this.snake.size/2 + this.snake.size/2
+        &&
+        Math.abs(this.snake.body[0].y - this.snake.body[i].y) < this.snake.size/2 + this.snake.size/2
+        ){
+            return false;
+        }        
+    }
+    //碰撞食物
+    if(
+      Math.abs(this.snake.body[0].x - this.food.position.x) < this.snake.size/2 + this.food.size/2
+      &&
+      Math.abs(this.snake.body[0].y - this.food.position.y) < this.snake.size/2 + this.food.size/2
+    ){
+      this.create_food();
+      this.snake.length+=Math.ceil(this.food.size/this.snake.size);
+      this.score+=this.food.size;
+    }
+    return true;
+}
+Game.prototype.control=function(e){
+    if(!this.isDealControl)
+        return;
+    switch(e.keyCode){
+        case 37:if(this.snake.direction!==direction.RIGHT){this.snake.direction=direction.LEFT;this.isDealControl=false;}break;
+        case 38:if(this.snake.direction!==direction.DOWN){this.snake.direction=direction.UP;this.isDealControl=false;}break;
+        case 39:if(this.snake.direction!==direction.LEFT){this.snake.direction=direction.RIGHT;this.isDealControl=false;}break;
+        case 40:if(this.snake.direction!==direction.UP){this.snake.direction=direction.DOWN;this.isDealControl=false;}break;
+        case 32:
+            this.pause=!this.pause;
+            if(!this.pause)this.go();           
+            break;
+    }
+}
+Game.prototype.init=function(){
+    let that=this;
+    let slider_bar=document.getElementsByClassName('slider-bar')[0];
+    let slider_block=document.getElementsByClassName('slider-block')[0];
+    let moveX; 
+    slider_block.style.left = (slider_bar.offsetLeft+(200-this.snake.speed)*2)+'px';
+    slider_block.onmousedown=function(event){
+        var event = event || window.event;
+        var diffX = event.clientX - slider_block.offsetLeft;
+        var diffY = event.clientY - slider_block.offsetTop;
+        if(typeof slider_block.setCapture !== 'undefined'){
+            slider_block.setCapture(); 
+        }           
+        document.onmousemove = function(event){
+            var event = event || window.event;
+            moveX = event.clientX - diffX;
+            if(moveX<slider_bar.offsetLeft)
+                moveX=slider_bar.offsetLeft;
+            if(moveX>slider_bar.offsetLeft+slider_bar.offsetWidth)
+                moveX=slider_bar.offsetLeft+slider_bar.offsetWidth
+            // var moveY = event.clientY - diffY;
+            if(moveX < 0){
+                moveX = 0
+            }else if(moveX > window.innerWidth - slider_block.offsetWidth){
+                moveX = window.innerWidth - slider_block.offsetWidth
+            }
+            // if(moveY < 0){
+            //     moveY = 0
+            // }else if(moveY > window.innerHeight - slider_block.offsetHeight){
+            //     moveY =  window.innerHeight - slider_block.offsetHeight
+            // }
+            slider_block.style.left = moveX + 'px';
+            // slider_block.style.top = moveY + 'px'
+        }
+        document.onmouseup = function(event){
+            this.onmousemove = null;
+            this.onmouseup = null;
+            //value:0-300  speed:200-50
+            let value=moveX-slider_bar.offsetLeft;
+            let speed=200-value*0.5;
+            localStorage.setItem('snake_speed',speed);
+            that.snake.speed=speed;
+            //低版本ie bug  
+            if(typeof slider_block.releaseCapture!='undefined'){  
+                slider_block.releaseCapture();  
+            }  
+        }
+    }
+            
+}
+Game.prototype.go=function(){
+    if(!this.move())
+    {                
+        alert('游戏失败咯');
+        return
+    }
+    this.reset_map();
+    //计分
+    document.getElementById('score').innerHTML=this.score;
+    if(this.pause)return;
+    setTimeout(() => {
+        this.go();
+    }, this.snake.speed);
+}
+ 
+var game=new Game();
+game.go();
+ 
+ 
+ 
+</script>
+</html>
